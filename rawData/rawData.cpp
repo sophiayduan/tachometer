@@ -2,8 +2,8 @@
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "BELL227";
-// const char* password = "3DE33F2FE311";
+const char* ssid = "";
+const char* password = "";
 
 WebSocketsClient webSocket;
 
@@ -28,5 +28,5 @@ void loop() {
   serializeJson(doc, jsonString);
   webSocket.sendTXT(jsonString);
 
-  delay(10); // send every 10ms
+  delay(1000); // send every 10ms
 }

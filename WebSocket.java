@@ -11,13 +11,13 @@ import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class WebSocketServer {
+public class WebSocket {
     public static void main(String[] args)
             throws IOException, NoSuchAlgorithmException {
-        ServerSocket server = new ServerSocket(8080);
+        ServerSocket server = new ServerSocket(8080); //8080 port for websocket
         try {
             System.out.println(
-                    "Server has started on 192.168.2.189:8080\r\nWaiting for a connection..."
+                    "Waiting for a connection..."
             );
             Socket client = server.accept();
             System.out.println("Client connected: " + client.getInetAddress());
@@ -54,26 +54,17 @@ public class WebSocketServer {
 
                     out.write(response, 0, response.length);
                     out.flush();
-                    System.out.println("WebSocket handshake complete.");
+                    System.out.println("WebSocket handshake complete");
 
                     while (true) {
                         byte[] header = in.readNBytes(2);
                         if (header.length < 2) {
-                            System.out.println("Connection closed.");
+                            System.out.println("Connection closed");
                             break;
                         }
 
                         int payloadLen = header[1] & 0x7F; // mask bit stripped
 
-                        // Handle extended payload lengths
-                        if (payloadLen == 126) {
-                            byte[] extLen = in.readNBytes(2);
-                            payloadLen = ((extLen[0] & 0xFF) << 8) | (extLen[1] & 0xFF);
-                        } else if (payloadLen == 127) {
-                            in.readNBytes(8); // skip 64-bit length for now
-                            System.out.println("Payload too large!");
-                            break;
-                        }
 
                         byte[] maskKey = in.readNBytes(4);
                         byte[] encoded = in.readNBytes(payloadLen);
@@ -86,8 +77,8 @@ public class WebSocketServer {
                         String message = new String(decoded, "UTF-8");
                         System.out.println("Received: " + message);
 
-                        // Parse JSON and calculate magnetic field
-                        // Example: {"analog":2048,"hall_mT":1850}
+
+
                         double hallValue = parseHallValue(message);
                         if (hallValue >= 0) {
                             double mag = calculateMagneticField(hallValue);
@@ -103,8 +94,9 @@ public class WebSocketServer {
         }
     }
 
+
     static double parseHallValue(String json) {
-        // Simple JSON parsing (for production, use a JSON library)
+
         Pattern pattern = Pattern.compile("\"hall_mT\":(\\d+)");
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
@@ -114,12 +106,11 @@ public class WebSocketServer {
     }
 
     static double calculateMagneticField(double rawValue) {
-        // ESP32 ADC: 12-bit (0-4095), assuming 3.3V reference
         double voltage = (rawValue / 4095.0) * 3.3;
-        double zeroLevel = 1.65; // 3.3V / 2
-        double sensitivity = 0.0025; // 2.5mV per Gauss (adjust for your sensor)
+        double zeroLevel = 2.5; // maxv /2
+        double sensitivity = 0.0025; // tbd
         double gauss = (voltage - zeroLevel) / sensitivity;
-        return gauss * 0.1; // Convert Gauss to milliTesla
+        return gauss * 0.1; // convert Gauss to milliTesla
     }
 
     static void sendMessage(OutputStream out, String msg) throws IOException {
@@ -127,17 +118,16 @@ public class WebSocketServer {
         int len = payload.length;
 
         ByteArrayOutputStream frame = new ByteArrayOutputStream();
-        frame.write(0x81); // FIN + text opcode
+        frame.write(0x81); 
 
         if (len <= 125) {
-            frame.write(len); // No mask bit (server to client)
+            frame.write(len); 
         } else if (len <= 65535) {
             frame.write(126);
             frame.write((len >> 8) & 0xFF);
             frame.write(len & 0xFF);
         } else {
             frame.write(127);
-            // Write 64-bit length
             for (int i = 7; i >= 0; i--) {
                 frame.write((len >> (8 * i)) & 0xFF);
             }
@@ -149,3 +139,4 @@ public class WebSocketServer {
         out.flush();
     }
 }
+
