@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Tachometer</title>
+        <!-- tailwindcss for styling and chart.js for graphing -->
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>    
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  
+
+        <script src="/site/src/script.js"></script>
+    </head>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+    </style>
+    <body class="font-[JetBrains_Mono] bg-[#1c1c1c] text-[#ebebeb] p-8 xl:p-20 flex flex-col h-screen box-border">
+        <div class="flex justify-between items-center">
+            <h1 class="text-4xl">TACHOMETER</h1>
+            <div class="text-right">
+                <p>ICS4U</p>
+                <p>Sophia Duan</p>
+            </div>
+        </div>
+        <section class="flex h-full grow gap-x-4 mt-10">
+            <div class="space-y-2 max-w-[30%] h-full flex flex-col justify-between">
+                <div>
+                    <h4 class="text-2xl">RPM</h4>
+                    <h1 id="rpm" class="text-8xl text-[#3CC758]">0000</h1>
+                    <p>Lorme ais jfakjf fj ausk fkjsf sajhq 9wouq welsfn vasm dmsabv</p>
+                </div>
+                <div class="space-y-4">
+                    <div class="p-4 pb-10 border-2 rounded-lg">
+                        <h4>MAG FIELD</h4>
+                        <h2 id="mag" class="text-3xl">000 mT</h2>
+                    </div>
+                    <!-- TODO: add user input popup for voltage, then determin approx. kV -->
+                    <!-- <div class="p-4 pb-10 border-2 rounded-lg">
+                        <h4>kV RATING</h4>
+                        <h2 id="kv" class="text-3xl">000</h2>
+
+                    </div> -->
+                </div>
+                
+            </div>
+
+            <div class="grow">
+                <!-- <h4 class="text-xl">GRAPH</h4> -->
+                <div class="border-2 h-full bg-sky-600/80 rounded-lg">
+                    <canvas id="graph" class="h-full w-full px-4 py-8"></canvas>
+                </div>
+            </div>
+        </section>
+    </body>
+   
+</html>
