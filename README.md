@@ -2,7 +2,7 @@
 A DIY tachometer, made to determine RPM using a magnet + hall effect sensor combo. 
 
 ### Prerequistes 
-- Arduino IDE + ESP32 board
+- Arduino IDE + ESP32 board (with WiFi capabilities)
 - Arduino libraries: WebSocketsClient, ArduinoJson, WiFi
 - Java 11+ (for the WebSocket server)
 
