@@ -20,13 +20,42 @@ public class Server {
     static CopyOnWriteArrayList<OutputStream> browserClients = new CopyOnWriteArrayList<>();
 
     // For calculating RPM from rawData.ino's data
-    static double peakThreshold = 0.5;   // BASED ON MAGNET STRENGTH ** TUNE THIS ** 
+    static double peakThreshold = 50;   // BASED ON MAGNET STRENGTH ** TUNE THIS ** its like approx. half of max
     static boolean aboveThreshold = false;
     static long lastPeakTime = -1;
     static double currentRpm = 0;
     static double peakRpm = 0;
 
+    // averaging 5 readings, for better rpm accurary (in theory)
+    static double[] rpmHistory = new double[5];
+    static int rpmIndex = 0;
+    static int rpmCount = 0;
+    static long RPM_TIMEOUT_MS = 2000; // if no peak detected for this long, RPM resets to 0
+
     public static void main(String[] args) throws IOException {
+
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(100); // check every 100ms
+                    long now = System.currentTimeMillis();
+                    if (lastPeakTime > 0 && (now - lastPeakTime) > RPM_TIMEOUT_MS) {
+                        currentRpm = 0;
+                        rpmCount = 0; // reset valid reading count
+                        java.util.Arrays.fill(rpmHistory, 0);
+                        // Broadcast the zeroed RPM to the browser
+                        String json = String.format(
+                            "{\"magneticField\":%.2f,\"rpm\":%.0f,\"peakRpm\":%.0f}",
+                            0.0, currentRpm, peakRpm
+                        );
+                        broadcastToBrowsers(json);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
         // Browser server (local website) on port 8081
         // It communicates w/ index.html over HTTP, then upgrades to WebSocket
         new Thread(() -> {
@@ -48,7 +77,7 @@ public class Server {
             System.out.println("Waiting for connection on port 8080...");
             while (true) {
                 Socket client = esp32Server.accept();
-                System.out.println("ESP32 connected!! " + client.getInetAddress());
+                System.out.println("ESP32 connected!! " + client.getInetAddress()); 
                 new Thread(() -> handleEsp32Client(client)).start();
             }
         } finally {
@@ -71,7 +100,10 @@ public class Server {
             if (wsMatcher.find() && keyMatcher.find()) {
                 // WebSocket handshake
                 byte[] response = (
-                        "Upgraded to WebSocket (browser)" +
+                        "HTTP/1.1 101 Switching Protocols\r\n" +
+                        "Upgrade: websocket\r\n" +
+                        "Connection: Upgrade\r\n" +
+                        "Sec-WebSocket-Accept: " +
                         Base64.getEncoder().encodeToString(
                                 MessageDigest.getInstance("SHA-1").digest(
                                         (keyMatcher.group(1).trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
@@ -97,8 +129,8 @@ public class Server {
                 }
 
             } else {
-                // Plain HTTP request,  for index.html
-                byte[] body = Files.readAllBytes(Paths.get("index.html"));
+                // Plain HTTP request
+                byte[] body = Files.readAllBytes(Paths.get("site/script.js"));
                 String response =
                         "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/html\r\n" +
@@ -129,7 +161,10 @@ public class Server {
                 match.find();
 
                 byte[] response = (
-                        "Upgraded to WebSocket (ESP32)" +
+                        "HTTP/1.1 101 Switching Protocols\r\n" +
+                        "Upgrade: websocket\r\n" +
+                        "Connection: Upgrade\r\n" +
+                        "Sec-WebSocket-Accept: " +
                         Base64.getEncoder().encodeToString(
                                 MessageDigest.getInstance("SHA-1").digest(
                                         (match.group(1).trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
@@ -180,23 +215,30 @@ public class Server {
         }
     }
 
-    // Current peak detection detects when the magnetic field strength goes above the "threshold"
-    // TODO: redo this to make it more accurate 
-
     static void updateRpm(double mag) {
         double absMag = Math.abs(mag);
+        long now = System.currentTimeMillis();
         if (!aboveThreshold && absMag > peakThreshold) {
             aboveThreshold = true;
-            long now = System.currentTimeMillis();
             if (lastPeakTime > 0) {
                 double intervalMs = now - lastPeakTime;
-                currentRpm = 60_000.0 / intervalMs;
+                double instantRpm = 60_000.0 / intervalMs;
+
+                rpmHistory[rpmIndex % rpmHistory.length] = instantRpm;
+                rpmIndex++;
+                if (rpmCount < rpmHistory.length) rpmCount++;
+                double sum = 0;
+                for (int i = 0; i < rpmCount; i++) sum += rpmHistory[i];
+                currentRpm = sum / rpmCount;
+
                 if (currentRpm > peakRpm) peakRpm = currentRpm;
             }
             lastPeakTime = now;
         } else if (aboveThreshold && absMag <= peakThreshold) {
             aboveThreshold = false;
         }
+
+        System.out.printf("Mag: %.2f mT, RPM: %.0f, Peak RPM: %.0f%n", mag, currentRpm, peakRpm);
     }
 
     static void broadcastToBrowsers(String msg) {
@@ -210,7 +252,7 @@ public class Server {
     }
 
     static double parseHallValue(String json) {
-        Pattern pattern = Pattern.compile("\"hall_mT\":(\\d+)");
+        Pattern pattern = Pattern.compile("\"hall_mT\":([\\d.]+)");        
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Double.parseDouble(matcher.group(1));
@@ -221,7 +263,7 @@ public class Server {
     static double calculateMagneticField(double rawValue) {
         double voltage = (rawValue / 4095.0) * 5;
         double zeroLevel = 2.5; // max voltage (5)/2
-        double sensitivity = 0.0025; // ** ADJUST THIS **
+        double sensitivity = 0.0025; // ** ADJUST THIS ** Note: 0.0025 seems to be working fine so far
         double gauss = (voltage - zeroLevel) / sensitivity;
         return gauss * 0.1; // convert Gauss to milliTesla
     }

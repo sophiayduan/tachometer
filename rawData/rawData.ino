@@ -60,6 +60,6 @@ void loop() {
 
   // myESC.writeMicroseconds(currentPulse);
 
-  delay(100); 
+  delay(10); // every 10ms 
 }
   
