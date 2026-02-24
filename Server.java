@@ -19,34 +19,53 @@ public class Server {
     // All connected browser WebSocket clients
     static CopyOnWriteArrayList<OutputStream> browserClients = new CopyOnWriteArrayList<>();
 
-    // For calculating RPM from rawData.ino's data
-    static double peakThreshold = 50;   // BASED ON MAGNET STRENGTH ** TUNE THIS ** its like approx. half of max
-    static boolean aboveThreshold = false;
-    static long lastPeakTime = -1;
-    static double currentRpm = 0;
-    static double peakRpm = 0;
+    // prevents retriggers
+    static double risingThreshold = 60;   // TUNE THIS — approx. half of max signal
+    static double fallingThreshold = 20;  // must drop below this before next peak is counted
+    static long MIN_PEAK_INTERVAL_MS = (long)(60_000.0 / 50000); // derived from RPM_MAX
 
-    // averaging 5 readings, for better rpm accurary (in theory)
-    static double[] rpmHistory = new double[5];
+    // volatile so the timeout thread always sees up to date values from the ESP32 
+    static volatile boolean aboveThreshold = false;
+    static volatile long lastPeakTime = -1;
+    static volatile double currentRpm = 0;
+    static volatile double peakRpm = 0;
+
+    static volatile double lastMag = 0;
+
+  
+    static volatile double currentPulseMax = 0;
+    static volatile long currentPulseMaxTime = -1;
+
+    
+    static final int RPM_HISTORY_LEN = 2; // smaller = faster response to speed changes like deceleration
+    static double[] rpmHistory = new double[RPM_HISTORY_LEN];
     static int rpmIndex = 0;
     static int rpmCount = 0;
-    static long RPM_TIMEOUT_MS = 2000; // if no peak detected for this long, RPM resets to 0
+    static long RPM_TIMEOUT_MS = 3000; // give slow deceleration time 
+
+    // limits for reasonable spm
+    static double RPM_MIN = 10;
+    static double RPM_MAX = 10000; 
+
+
+    static volatile long lastBroadcastTime = 0;
+    static final long BROADCAST_INTERVAL_MS = 50; // 20fps to browser, more than enough for display
 
     public static void main(String[] args) throws IOException {
 
+        // resets RPM to 0 if no peak detected recently
         new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(100); // check every 100ms
-                    long now = System.currentTimeMillis();
+                    Thread.sleep(100);
+                    long now = System.nanoTime() / 1_000_000;
                     if (lastPeakTime > 0 && (now - lastPeakTime) > RPM_TIMEOUT_MS) {
                         currentRpm = 0;
-                        rpmCount = 0; // reset valid reading count
+                        rpmCount = 0;
                         java.util.Arrays.fill(rpmHistory, 0);
-                        // Broadcast the zeroed RPM to the browser
                         String json = String.format(
                             "{\"magneticField\":%.2f,\"rpm\":%.0f,\"peakRpm\":%.0f}",
-                            0.0, currentRpm, peakRpm
+                            lastMag, currentRpm, peakRpm
                         );
                         broadcastToBrowsers(json);
                     }
@@ -56,8 +75,7 @@ public class Server {
             }
         }).start();
 
-        // Browser server (local website) on port 8081
-        // It communicates w/ index.html over HTTP, then upgrades to WebSocket
+        // Browser WebSocket server on port 8081
         new Thread(() -> {
             try {
                 ServerSocket browserServer = new ServerSocket(8081);
@@ -71,13 +89,12 @@ public class Server {
             }
         }).start();
 
-        // WebSocket server on 8080 to connected to ESP32 
+        // ESP32 WebSocket server on port 8080
         ServerSocket esp32Server = new ServerSocket(8080);
         try {
             System.out.println("Waiting for connection on port 8080...");
             while (true) {
                 Socket client = esp32Server.accept();
-                System.out.println("ESP32 connected!! " + client.getInetAddress()); 
                 new Thread(() -> handleEsp32Client(client)).start();
             }
         } finally {
@@ -93,12 +110,10 @@ public class Server {
 
             String data = s.useDelimiter("\\r\\n\\r\\n").next();
 
-            // Check if this is a WebSocket upgrade request
             Matcher wsMatcher = Pattern.compile("Upgrade: websocket", Pattern.CASE_INSENSITIVE).matcher(data);
             Matcher keyMatcher = Pattern.compile("Sec-WebSocket-Key: (.*)").matcher(data);
 
             if (wsMatcher.find() && keyMatcher.find()) {
-                // WebSocket handshake
                 byte[] response = (
                         "HTTP/1.1 101 Switching Protocols\r\n" +
                         "Upgrade: websocket\r\n" +
@@ -118,7 +133,6 @@ public class Server {
 
                 browserClients.add(out);
 
-                // Keep connection open, discard any incoming frames
                 try {
                     while (true) {
                         if (in.read() == -1) break;
@@ -129,11 +143,17 @@ public class Server {
                 }
 
             } else {
-                // Plain HTTP request
-                byte[] body = Files.readAllBytes(Paths.get("site/script.js"));
+                String path = "site/index.html";
+                if (data.contains("GET /script.js")) {
+                    path = "site/script.js";
+                }
+
+                byte[] body = Files.readAllBytes(Paths.get(path));
+                String contentType = path.endsWith(".js") ? "application/javascript" : "text/html";
+
                 String response =
                         "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: text/html\r\n" +
+                        "Content-Type: " + contentType + "\r\n" +
                         "Content-Length: " + body.length + "\r\n" +
                         "Connection: close\r\n\r\n";
                 out.write(response.getBytes("UTF-8"));
@@ -184,7 +204,16 @@ public class Server {
                         break;
                     }
 
-                    int payloadLen = header[1] & 0x7F; // mask bit stripped
+                    int payloadLen = header[1] & 0x7F;
+
+                    if (payloadLen == 126) {
+                        byte[] ext = in.readNBytes(2);
+                        payloadLen = ((ext[0] & 0xFF) << 8) | (ext[1] & 0xFF);
+                    } else if (payloadLen == 127) {
+                        byte[] ext = in.readNBytes(8);
+                        payloadLen = ((ext[4] & 0xFF) << 24) | ((ext[5] & 0xFF) << 16) |
+                                     ((ext[6] & 0xFF) << 8)  |  (ext[7] & 0xFF);
+                    }
 
                     byte[] maskKey = in.readNBytes(4);
                     byte[] encoded = in.readNBytes(payloadLen);
@@ -195,18 +224,34 @@ public class Server {
                     }
 
                     String message = new String(decoded, "UTF-8");
-                    // System.out.println("Received: " + message);
 
                     double hallValue = parseHallValue(message);
                     if (hallValue >= 0) {
                         double mag = calculateMagneticField(hallValue);
-                        updateRpm(mag);
+                        lastMag = mag; 
+                        updateRpm(mag); 
 
-                        String json = String.format(
-                                "{\"magneticField\":%.2f,\"rpm\":%.0f,\"peakRpm\":%.0f}",
-                                mag, currentRpm, peakRpm
-                        );
-                        broadcastToBrowsers(json);
+                        // Only push to browser at 20fps, not constant like esp32
+                        long nowMs = System.nanoTime() / 1_000_000;
+                        if (nowMs - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
+                            lastBroadcastTime = nowMs;
+
+
+                            double displayRpm = currentRpm;
+                            if (lastPeakTime > 0) {
+                                long msSinceLastPeak = nowMs - lastPeakTime;
+                                double impliedMaxRpm = 60_000.0 / msSinceLastPeak;
+                                if (impliedMaxRpm < displayRpm) {
+                                    displayRpm = impliedMaxRpm;
+                                }
+                            }
+
+                            String json = String.format(
+                                    "{\"magneticField\":%.2f,\"rpm\":%.0f,\"peakRpm\":%.0f}",
+                                    mag, displayRpm, peakRpm
+                            );
+                            broadcastToBrowsers(json);
+                        }
                     }
                 }
             }
@@ -216,29 +261,66 @@ public class Server {
     }
 
     static void updateRpm(double mag) {
-        double absMag = Math.abs(mag);
-        long now = System.currentTimeMillis();
-        if (!aboveThreshold && absMag > peakThreshold) {
+        long now = System.nanoTime() / 1_000_000;
+
+        if (!aboveThreshold && mag > risingThreshold) {
+            // Rising edge= start tracking this pulse
             aboveThreshold = true;
-            if (lastPeakTime > 0) {
-                double intervalMs = now - lastPeakTime;
+            currentPulseMax = mag;
+            currentPulseMaxTime = now;
+
+        } else if (aboveThreshold && mag > currentPulseMax) {
+            // if it it still increasing
+            currentPulseMax = mag;
+            currentPulseMaxTime = now;
+
+        } else if (aboveThreshold && mag < fallingThreshold) {
+            aboveThreshold = false;
+
+            if (lastPeakTime > 0 && currentPulseMaxTime > 0) {
+                double intervalMs = currentPulseMaxTime - lastPeakTime;
+
+                // reject impossible readings/intervals
+                if (intervalMs < MIN_PEAK_INTERVAL_MS) {
+                    lastPeakTime = currentPulseMaxTime;
+                    currentPulseMax = 0;
+                    currentPulseMaxTime = -1;
+                    return;
+                }
+
                 double instantRpm = 60_000.0 / intervalMs;
 
-                rpmHistory[rpmIndex % rpmHistory.length] = instantRpm;
-                rpmIndex++;
-                if (rpmCount < rpmHistory.length) rpmCount++;
-                double sum = 0;
-                for (int i = 0; i < rpmCount; i++) sum += rpmHistory[i];
-                currentRpm = sum / rpmCount;
+                // Discard readings outside a reasonable RPM range
+                if (instantRpm >= RPM_MIN && instantRpm <= RPM_MAX) {
+                    rpmHistory[rpmIndex % RPM_HISTORY_LEN] = instantRpm;
+                    rpmIndex++;
+                    if (rpmCount < RPM_HISTORY_LEN) rpmCount++;
 
-                if (currentRpm > peakRpm) peakRpm = currentRpm;
+                    // it averages the values, but it is WEIGHTED (to prioritize recent values)
+                    double weightedSum = 0;
+                    double totalWeight = 0;
+                    for (int i = 0; i < rpmCount; i++) {
+                        int age = (rpmCount - 1 - i); 
+                        int bufIdx = ((rpmIndex - 1 - i) % RPM_HISTORY_LEN + RPM_HISTORY_LEN) % RPM_HISTORY_LEN;
+                        double weight = (rpmCount - age); 
+                        weightedSum += rpmHistory[bufIdx] * weight;
+                        totalWeight += weight;
+                    }
+                    currentRpm = weightedSum / totalWeight;
+
+                    if (currentRpm > peakRpm) peakRpm = currentRpm;
+                }
             }
-            lastPeakTime = now;
-        } else if (aboveThreshold && absMag <= peakThreshold) {
-            aboveThreshold = false;
+
+            lastPeakTime = currentPulseMaxTime;
+            currentPulseMax = 0;
+            currentPulseMaxTime = -1;
         }
 
-        System.out.printf("Mag: %.2f mT, RPM: %.0f, Peak RPM: %.0f%n", mag, currentRpm, peakRpm);
+        long nowMs = System.nanoTime() / 1_000_000;
+        if (nowMs - lastBroadcastTime < 5) {
+            System.out.printf("Mag: %.2f mT, RPM: %.0f, Peak RPM: %.0f%n", mag, currentRpm, peakRpm);
+        }
     }
 
     static void broadcastToBrowsers(String msg) {
@@ -252,7 +334,7 @@ public class Server {
     }
 
     static double parseHallValue(String json) {
-        Pattern pattern = Pattern.compile("\"hall_mT\":([\\d.]+)");        
+        Pattern pattern = Pattern.compile("\"hall_mT\":([\\d.]+)");
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             return Double.parseDouble(matcher.group(1));
@@ -262,10 +344,10 @@ public class Server {
 
     static double calculateMagneticField(double rawValue) {
         double voltage = (rawValue / 4095.0) * 5;
-        double zeroLevel = 2.5; // max voltage (5)/2
-        double sensitivity = 0.0025; // ** ADJUST THIS ** Note: 0.0025 seems to be working fine so far
+        double zeroLevel = 2.5;
+        double sensitivity = 0.0025; // ADJUST THIS if needed
         double gauss = (voltage - zeroLevel) / sensitivity;
-        return gauss * 0.1; // convert Gauss to milliTesla
+        return gauss * 0.1; // Gauss to milliTesla
     }
 
     static void sendMessage(OutputStream out, String msg) throws IOException {

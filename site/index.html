@@ -14,7 +14,7 @@
         /* @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap'); */
     </style>
 
-    <body class="font-[Geist_Mono] bg-[#050404] text-[#ebebeb] p-8 xl:px-12 xl:pt-12 2xl:px-20 2xl:py-20 flex flex-col min-h-screen lg:h-screen">
+    <body class="font-[Geist_Mono] bg-[#050404] text-[#ebebeb] p-4 sm:p-8 xl:px-12 xl:pt-12 2xl:px-20 2xl:py-20 flex flex-col min-h-screen lg:h-screen">
         <div class="flex justify-between items-center">
             <h1 class="text-4xl 2xl:text-6xl">TACHOMETER</h1>
             <div class="text-right text-lg 2xl:text-2xl">
@@ -23,8 +23,8 @@
             </div>
         </div>
         <div class="mt-6">
-            <button id="btn-start" class="text-xl px-4 py-2 bg-[#85CB33] rounded-full text-[#1c1c1c] font-semibold" onclick="handleStart()">START</button>
-            <button id="btn-clear" class="text-xl px-4 py-2 bg-[#CC2936] rounded-full font-semibold" onclick="handleClear()">CLEAR</button>
+            <button id="btn-start" class="text-xl px-4 py-2 bg-[#85CB33] rounded-full text-[#1c1c1c] font-semibold cursor-pointer" onclick="handleStart()">START</button>
+            <button id="btn-clear" class="text-xl px-4 py-2 bg-[#CC2936] rounded-full font-semibold cursor-pointer" onclick="handleClear()">CLEAR</button>
         </div>
         <section class="flex flex-col-reverse xl:flex-row h-full grow gap-x-4 2xl:gap-x-10 mt-10">
             <div class="w-full xl:max-w-[30%] flex flex-col h-full justify-between h-full">
@@ -32,12 +32,12 @@
                     <div class="flex flex-row xl:flex-col gap-6 items-center xl:items-start h-full w-full justify-between mt-10 lg:mt-0">
                         <div class="">
                             <h4 class="text-2xl 2xl:text-4xl ">RPM</h4>
-                            <h1 id="rpm" class="text-8xl 2xl:text-[9vw]">0000</h1>
-                            <p class="text-lg 2xl:text-xl opacity-60">This is updating every 10ms!</p>
+                            <h1 id="rpm" class="text-6xl md:text-8xl 2xl:text-[9vw]">0000</h1>
+                            <!-- <p class="text-lg 2xl:text-xl opacity-60">This is updating every 10ms!</p> -->
                         </div>
                         <!-- <img src="/site/public/bldc.png" alt="bldc" class="hidden xl:block w-full md:max-w-80 h-auto"> -->
 
-                        <div class="w-full p-4 2xl:p-6 pb-10 border-2 rounded-lg space-y-4 bg-[#1c1c1c] flex flex-col">
+                        <div class="w-full p-2 md:p-4 2xl:p-6 md:pb-10 border-2 rounded-lg md:space-y-4 bg-[#1c1c1c] flex flex-col">
                             <h4 class="text-2xl 2xl:text-4xl">MAG FIELD</h4>
                             <h2 id="mag" class="text-3xl lg:text-5xl xl:text-6xl">000 mT</h2>
                         </div>

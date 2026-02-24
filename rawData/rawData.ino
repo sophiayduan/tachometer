@@ -18,33 +18,37 @@
 // Servo myESC;
 // long currentPulse = ESC_MIN;
 
-const char* ssid = "YOUR_SSID";
-const char* password = "YOUR_PASSWORD";
+const char* ssid = "SSID";
+const char* password = "PASSWORD";
 
 WebSocketsClient webSocket;
 
 #define HALL_PIN 35
 bool sent = false;
 
-
+unsigned long lastSample = 0;
 void setup() {
   Serial.begin(115200);
   // myESC.attach(ESC_PIN, ESC_MIN, ESC_MAX);
   // myESC.writeMicroseconds(currentPulse);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) { delay(500); }
-  webSocket.begin("YOUR_IP_ADDRESS", 8080, "/");
+  webSocket.begin("10.207.199.150", 8080, "/");
 }
 
 void loop() {
-  webSocket.loop();
+webSocket.loop();
 
-  JsonDocument doc;
-  doc["analog"] = analogRead(0);
-  doc["hall_mT"] = analogRead(HALL_PIN);
-  String jsonString;
-  serializeJson(doc, jsonString);
-  webSocket.sendTXT(jsonString);
+  unsigned long now = micros();
+  if (now - lastSample >= 500) { 
+    lastSample = now;
+    JsonDocument doc;
+    doc["analog"] = analogRead(0);
+    doc["hall_mT"] = analogRead(HALL_PIN);
+    String jsonString;
+    serializeJson(doc, jsonString);
+    webSocket.sendTXT(jsonString);
+  }
 
 
   // int potValue = analogRead(POT_PIN); 
@@ -60,6 +64,6 @@ void loop() {
 
   // myESC.writeMicroseconds(currentPulse);
 
-  delay(10); // every 10ms 
+
 }
   

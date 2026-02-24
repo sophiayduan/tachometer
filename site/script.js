@@ -1,4 +1,13 @@
   // Below is for the graph of the magnetic field strength (it updates live)
+
+const isMobile = window.innerWidth < 768;
+
+const fontSizes = {
+  title: isMobile ? 18 : 36,
+  axis: isMobile ? 12 : 24,
+  ticks: isMobile ? 10 : 18
+};
+
 const ctx = document.getElementById('graph').getContext('2d');
 Chart.defaults.font.family = 'Geist_Mono, monospace';
 const graph = new Chart (ctx, {
@@ -22,31 +31,30 @@ const graph = new Chart (ctx, {
         responsive:true,
         maintainAspectRatio: false,
         plugins: {
-            title: {
-                display: true,
-                text: 'Magnetic Field Vs. Time',
-                color: '#EBEBEB',
-                font: { size: 36 },
-                padding: { bottom: 20 } 
-            },
-            legend: {
-                labels: { color: '#EBEBEB', font: { size: 24 } },
-            }
+        title: {
+            display: true,
+            text: 'Magnetic Field Vs. Time',
+            color: '#EBEBEB',
+            font: { size: fontSizes.title },
+            padding: { bottom: isMobile ? 10 : 20 } 
+        },
+        legend: {
+            labels: { color: '#EBEBEB', font: { size: fontSizes.axis } },
+        }
         },
         scales: {
         x: { 
-            title: { display: true, text: 'Time (ms)', color: '#EBEBEB', font: {size:24}, padding: { top: 20 }}, 
+            title: { display: true, text: 'Time (ms)', color: '#EBEBEB', font: {size: fontSizes.axis}, padding: { top: 10 }}, 
             grid:{display:false},                  
         },
         y: { 
-            title: { display: true, text: 'Magnetic Field Strength (mT)', color: '#EBEBEB', font: {size:24}, padding: { bottom: 20 } },
-            ticks: { color: '#EBEBEB', font: { size: 18 }, stepSize:50},
-            grid: { color: 'rgba(235, 235, 235, 0.40)' }, // #EBEBEB but at 60% opacity
-                min: -50,
-                max: 100,
-                beginAtZero: false 
+            title: { display: true, text: 'Magnetic Field (mT)', color: '#EBEBEB', font: {size: fontSizes.axis}, padding: { bottom: 10 } },
+            ticks: { color: '#EBEBEB', font: { size: fontSizes.ticks }, stepSize:50},
+            grid: { color: 'rgba(235, 235, 235, 0.40)' },
+            min: -50,
+            max: 100,
         }
-    }
+        }
         
     }
 });
@@ -162,12 +170,12 @@ function connectSocket() {
     };
 
     socket.onclose = () => {
-        magField.textContent = "Disconnected.";
+        magField.textContent = "Off";
     };
     // Error 
-    socket.onerror = (error) => {
-        magField.textContent = "Error";
-    };
+    // socket.onerror = (error) => {
+    //     magField.textContent = "Error";
+    // };
 }
 
 function refreshChart() {
