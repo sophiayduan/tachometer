@@ -3,6 +3,7 @@
 ### A _greatly_ overcomplicated tachometer that determines RPM using a magnet and hall effect sensor, then outputs it to a live dashboard via Wi-Fi.
 <img src="https://cdn.hackclub.com/019cd32f-7901-7e60-84c0-4892da624f1f/image.png" width="700px" height="auto">
 
+> this was a school assignment, and therefore, a really awesome excuse to expand on my [BLDC motor](https://github.com/sophiayduan/bldc-motor/tree/main) project
 
 ### Prerequistes 
 - Arduino IDE + ESP32 board (with WiFi capabilities)
@@ -25,4 +26,3 @@ Port 8081 is used for HTTP (web browser), the WebSocket aswell
 
 Open `index.html` using Live Server (VS Code extension or equivalent).
 
-> this was a school assignment, and therefore, a really awesome excuse to continue my [BLDC motor](https://github.com/sophiayduan/bldc-motor/tree/main) project
