@@ -1,6 +1,8 @@
 # Tachometer
 A DIY tachometer, made to determine RPM using a magnet + hall effect sensor combo. 
 
+<img src="https://cdn.hackclub.com/019cd32f-7901-7e60-84c0-4892da624f1f/image.png" width="700px" height="auto">
+
 ### Prerequistes 
 - Arduino IDE + ESP32 board (with WiFi capabilities)
 - Arduino libraries: WebSocketsClient, ArduinoJson, WiFi
@@ -22,3 +24,4 @@ Port 8081 is used for HTTP (web browser), the WebSocket aswell
 
 Open `index.html` using Live Server (VS Code extension or equivalent).
 
+> this was a school assignment, and therefore, a really awesome excuse to continue my [BLDC motor](https://github.com/sophiayduan/bldc-motor/tree/main) project
